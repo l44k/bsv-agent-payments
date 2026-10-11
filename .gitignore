@@ -1,0 +1,10 @@
+.env
+node_modules/
+runs.json
+runs-*.json
+*.csv
+rate.json
+wallet-txs.json
+print-jobs/
+printed/
+state/

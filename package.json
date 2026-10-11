@@ -1,0 +1,32 @@
+{
+  "name": "bsv-agent-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node full-pipeline.js",
+    "update-rate": "node update-rate.js",
+    "watch-rate": "node update-rate.js --watch",
+    "analyze": "node analyze.js",
+    "print-shop": "node print-shop.js",
+    "agent": "node -r ./tracing.js agent-server.js",
+    "consumer-remote": "node -r ./tracing.js consumer-remote.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@bsv/sdk": "^2.8.7",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
+    "@opentelemetry/instrumentation-http": "^0.223.0",
+    "@opentelemetry/instrumentation-undici": "^0.33.0",
+    "@opentelemetry/resources": "^2.12.0",
+    "@opentelemetry/sdk-node": "^0.223.0",
+    "@opentelemetry/sdk-trace-base": "^2.12.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "dotenv": "^18.0.4",
+    "pdf-lib": "^1.17.1",
+    "pdf-to-printer": "^5.8.1"
+  }
+}

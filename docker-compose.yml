@@ -1,0 +1,55 @@
+# First slice: Jaeger + two competing summarizer agents + the buyer.
+#
+#   docker compose up --build -d jaeger summarizer-bot summarizer-bot-2
+#   docker compose run --rm consumer          # one session; repeat as often as you like
+#   open http://localhost:16686                # Jaeger: service "consumer", one trace per task
+#
+# Secrets come from .env in this folder (compose reads it for ${...}); each service
+# gets only its own: sellers get their own key and the Claude key, the buyer gets
+# the paying wallet. Nothing secret is built into the image.
+
+x-otel: &otel
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+
+services:
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.20.0
+    ports:
+      - "16686:16686"   # Jaeger UI; OTLP (4318) stays inside the compose network
+
+  summarizer-bot:
+    build: .
+    environment:
+      <<: *otel
+      AGENT_ID: summarizer-bot
+      OTEL_SERVICE_NAME: summarizer-bot
+      AGENT_WIF: ${PROVIDER_SUMMARIZER_WIF}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./state/summarizer-bot:/app/state
+
+  summarizer-bot-2:
+    build: .
+    environment:
+      <<: *otel
+      AGENT_ID: summarizer-bot-2
+      OTEL_SERVICE_NAME: summarizer-bot-2
+      AGENT_WIF: ${PROVIDER_SUMMARIZER2_WIF}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./state/summarizer-bot-2:/app/state
+
+  consumer:
+    build: .
+    command: ["node", "-r", "./tracing.js", "consumer-remote.js"]
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: consumer
+      CONSUMER_WIF: ${CONSUMER_WIF}
+      PROVIDER_URLS: http://summarizer-bot:4000,http://summarizer-bot-2:4000
+    volumes:
+      - ./state/consumer:/app/state
+    depends_on:
+      - jaeger
+      - summarizer-bot
+      - summarizer-bot-2
