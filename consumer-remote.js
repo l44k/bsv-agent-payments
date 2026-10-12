@@ -16,7 +16,7 @@ const fs = require('fs')
 const path = require('path')
 const { trace, isSpanContextValid } = require('@opentelemetry/api')
 const { payProvider, prefetchSpendable } = require('./payment')
-const { quoteSats } = require('./pricing')
+const { quoteSats, satsToUsd, formatUsd } = require('./pricing')
 const { ensureFreshRate, getBsvUsd } = require('./rate')
 const { consumerOffer, OPEN_FACTOR } = require('./negotiate')
 const { buildTasks } = require('./data/tasks')
@@ -114,9 +114,9 @@ async function runTaskRemote(task, { providers, consumerWif, payFn = payProvider
     Object.assign(record, { winner: w.provider.id, agreedPrice: w.price, rounds: w.rounds })
 
     const p0 = Date.now()
-    let txid
+    let txid, feeSats
     try {
-      ({ txid } = await withSpan('pay', { 'provider.id': w.provider.id, 'payment.sats': w.price }, () => payFn(consumerWif, w.provider.address, w.price)))
+      ({ txid, feeSats } = await withSpan('pay', { 'provider.id': w.provider.id, 'payment.sats': w.price }, () => payFn(consumerWif, w.provider.address, w.price)))
     } catch (err) {
       // nothing was broadcast, so nothing was paid: record it and go on with the next task
       timings.paymentBuildBroadcastMs = Date.now() - p0
@@ -126,7 +126,10 @@ async function runTaskRemote(task, { providers, consumerWif, payFn = payProvider
     }
     timings.paymentBuildBroadcastMs = Date.now() - p0
     record.txid = txid
-    log(`[consumer] Paid ${w.price} sats to ${w.provider.id}: ${txid}`)
+    record.priceUsd = satsToUsd(w.price, record.bsvUsd)
+    if (Number.isFinite(feeSats)) { record.feeSats = feeSats; record.feeUsd = satsToUsd(feeSats, record.bsvUsd) }
+    log(`[consumer] Paid ${w.price} sats (${formatUsd(record.priceUsd)}) to ${w.provider.id}` +
+      (record.feeSats !== undefined ? `, network fee ${record.feeSats} sats (${formatUsd(record.feeUsd)})` : '') + `: ${txid}`)
 
     const s0 = Date.now()
     let r = await post(`${w.provider.url}/service`, { quoteId: w.quoteId, txid })

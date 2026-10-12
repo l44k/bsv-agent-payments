@@ -5,19 +5,7 @@ BSV payments (testnet). A buyer agent asks competing seller agents for a price,
 negotiates, pays the cheapest one, and the seller delivers only after it has
 verified the payment on-chain. Built as the prototype for a bachelor's thesis.
 
-```mermaid
-flowchart LR
-  C[consumer<br/>buyer agent] -- "quote / negotiate / service (HTTP)" --> S1[summarizer-bot]
-  C -- HTTP --> S2[summarizer-bot-2]
-  C -- pays --> W[(BSV testnet<br/>via WhatsOnChain)]
-  S1 -- verifies payment --> W
-  S2 -- verifies payment --> W
-  S1 -- LLM call --> A[Claude API]
-  S2 -- LLM call --> A
-  C -. traces .-> J[Jaeger]
-  S1 -. traces .-> J
-  S2 -. traces .-> J
-```
+![Architecture: a buyer agent and two seller agents in Docker Compose, paying over BSV testnet, with tracing in Jaeger](docs/architecture.png)
 
 ## How one task works
 
@@ -28,6 +16,8 @@ flowchart LR
 5. The seller checks the payment on-chain, calls the LLM, and returns the result.
 
 Every task is one trace in Jaeger, across all containers.
+
+![One task in Jaeger: two parallel negotiations, the payment, then the seller's payment check and LLM call](docs/jaeger-trace.png)
 
 ## Quick start (Docker)
 
@@ -65,6 +55,8 @@ node analyze.js --state state --csv     # one row per task, for Excel or Power B
 
 `analyze.js` joins the two on the transaction id, because only the seller knows what
 a task really cost.
+Every payment is also shown in US dollars, together with the network fee of the payment
+transaction itself (in the test runs about 23 satoshis, roughly $0.000004 per payment).
 
 ## Design in brief
 

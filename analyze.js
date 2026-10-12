@@ -15,6 +15,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const { formatUsd } = require('./pricing')
 
 const args = process.argv.slice(2)
 const wantCsv = args.includes('--csv')
@@ -59,6 +60,8 @@ if (stateDir && fs.existsSync(stateDir)) {
 
 // ---------- helpers ----------
 const num = v => typeof v === 'number' && Number.isFinite(v)
+// sats -> USD at the rate recorded with that task
+const usdOf = (sats, r) => (num(sats) && num(r.bsvUsd) ? (sats * r.bsvUsd) / 1e8 : null)
 const sum = a => a.reduce((x, y) => x + y, 0)
 const mean = a => (a.length ? sum(a) / a.length : null)
 const sd = a => {
@@ -104,10 +107,10 @@ for (const r of tasks) {
 // ---------- CSV mode ----------
 if (wantCsv) {
   const cols = ['timestamp', 'mode', 'traceId', 'ledgerStatus', 'taskType', 'winner', 'success', 'bsvUsd', 'budget', 'agreedPrice', 'rounds', 'estCostSats',
-    'realAiCostSats', 'marginSats', 'estErrorSats', 'negotiationMs', 'paymentMs', 'verificationMs', 'serviceMs', 'totalMs', 'paidButNotDelivered']
+    'realAiCostSats', 'marginSats', 'estErrorSats', 'negotiationMs', 'paymentMs', 'verificationMs', 'serviceMs', 'totalMs', 'paidButNotDelivered', 'priceUsd', 'feeSats', 'feeUsd']
   const val = r => [r.timestamp, r.mode || 'local', r.traceId, r.ledgerStatus, r.taskType, r.winner, r.success, r.bsvUsd, r.budget, r.agreedPrice, r.rounds, r.estCostSats,
     r.realAiCostSats, r.marginSats, r.estErrorSats, r.timings && r.timings.negotiationMs, r.timings && r.timings.paymentBuildBroadcastMs,
-    r.timings && r.timings.verificationMs, r.timings && (r.timings.serviceCallMs ?? r.timings.aiCallMs), r.timings && r.timings.totalMs, r.paidButNotDelivered]
+    r.timings && r.timings.verificationMs, r.timings && (r.timings.serviceCallMs ?? r.timings.aiCallMs), r.timings && r.timings.totalMs, r.paidButNotDelivered, usdOf(r.agreedPrice, r), r.feeSats, usdOf(r.feeSats, r)]
   const cell = v => (v === undefined || v === null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v))
   console.log(cols.join(','))
   tasks.forEach(r => console.log(val(r).map(cell).join(',')))
@@ -136,16 +139,38 @@ table(['', 'n', 'share'], [
 // money: split services that cost the provider real API money from free-upstream ones
 const paid = done.filter(r => num(r.agreedPrice))
 const costed = paid.filter(r => num(r.realAiCostSats) && r.realAiCostSats > 0)
-const free = paid.filter(r => !(num(r.realAiCostSats) && r.realAiCostSats > 0))
+const free = paid.filter(r => r.realAiCostSats === 0)        // free upstream API (rate-bot): a real zero
+const unknownCost = paid.filter(r => !num(r.realAiCostSats)) // no seller ledger line: cost unknown, not zero
 console.log('\nMONEY (sats)')
 table(['', 'tasks', 'paid', 'provider cost', 'margin', 'margin / task', 'at a loss'], [
   ['services with real API cost', costed.length, f0(sum(costed.map(r => r.agreedPrice))), f0(sum(costed.map(r => r.realAiCostSats))),
     signed(sum(costed.map(r => r.marginSats ?? r.agreedPrice - r.realAiCostSats))), signed(mean(costed.map(r => r.marginSats ?? r.agreedPrice - r.realAiCostSats))),
     costed.filter(r => (r.marginSats ?? r.agreedPrice - r.realAiCostSats) < 0).length],
-  ['free-upstream services (rate)', free.length, f0(sum(free.map(r => r.agreedPrice))), '0', signed(sum(free.map(r => r.agreedPrice))), signed(mean(free.map(r => r.agreedPrice))), 0]
+  ['free-upstream services (rate)', free.length, f0(sum(free.map(r => r.agreedPrice))), '0', signed(sum(free.map(r => r.agreedPrice))), signed(mean(free.map(r => r.agreedPrice))), 0],
+  ...(unknownCost.length ? [['cost unknown (no seller ledger line)', unknownCost.length, f0(sum(unknownCost.map(r => r.agreedPrice))), '-', '-', '-', '-']] : [])
 ])
 
 // by task type
+{
+  const withRate = costed.filter(r => num(r.bsvUsd))
+  if (withRate.length) {
+    const paidUsd = sum(withRate.map(r => usdOf(r.agreedPrice, r))), costUsd = sum(withRate.map(r => usdOf(r.realAiCostSats, r)))
+    console.log(`  in USD (at each task's rate): paid ${formatUsd(paidUsd)} · provider cost ${formatUsd(costUsd)} · margin ${formatUsd(paidUsd - costUsd)} · per task ${formatUsd(paidUsd / withRate.length)}`)
+  }
+}
+
+// network fees: what each payment transaction itself cost (miner fee)
+const feed = tasks.filter(r => num(r.feeSats) && num(r.agreedPrice))
+if (feed.length) {
+  const fees = feed.map(r => r.feeSats), feesUsd = feed.map(r => usdOf(r.feeSats, r)).filter(num)
+  console.log('\nNETWORK FEES (what one payment transaction cost the buyer, on top of the price)')
+  table(['', 'payments', 'median', 'mean', 'max', 'total'], [
+    ['sats', feed.length, f0(median(fees)), f1(mean(fees)), f0(Math.max(...fees)), f0(sum(fees))],
+    ['USD', feesUsd.length, formatUsd(median(feesUsd)), formatUsd(mean(feesUsd)), formatUsd(Math.max(...feesUsd)), formatUsd(sum(feesUsd))]
+  ])
+  console.log(`  the fee was on average ${f1(mean(feed.map(r => (100 * r.feeSats) / r.agreedPrice)))} % of the price paid`)
+}
+
 console.log('\nBY TASK TYPE')
 table(['type', 'tasks', 'completed', 'avg rounds', 'avg price', 'avg margin'],
   Object.entries(groupBy(tasks, r => r.taskType)).map(([t, rs]) => {

@@ -35,4 +35,18 @@ function estimateTokens(text) {
   return Math.ceil(String(text).length / 4)
 }
 
-module.exports = { usdCostOfCall, usdToSats, quoteSats, satsPerUsd, getBsvUsd, estimateTokens }
+// sats -> USD at a given BSV/USD rate (default: the current cached rate)
+function satsToUsd(sats, bsvUsd = getBsvUsd()) {
+  return (sats * bsvUsd) / 100_000_000
+}
+
+// Micropayments are fractions of a cent, so show enough decimals to see two
+// significant digits: $0.00097, $0.000013, $1.50.
+function formatUsd(usd) {
+  if (!Number.isFinite(usd)) return '-'
+  if (usd === 0) return '$0'
+  const decimals = Math.min(10, Math.max(2, Math.ceil(-Math.log10(Math.abs(usd))) + 1))
+  return `$${usd.toFixed(decimals)}`
+}
+
+module.exports = { usdCostOfCall, usdToSats, quoteSats, satsPerUsd, getBsvUsd, estimateTokens, satsToUsd, formatUsd }

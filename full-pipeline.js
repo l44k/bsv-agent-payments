@@ -24,7 +24,7 @@ const { negotiate } = require('./negotiate')
 const { payProvider } = require('./payment')
 const { verifyPayment } = require('./verify')
 const { buildTasks, RATE_TASK } = require('./data/tasks')
-const { quoteSats } = require('./pricing')
+const { quoteSats, satsToUsd, formatUsd } = require('./pricing')
 const { getBsvUsd, isStale, saveRate, describeRate } = require('./rate')
 
 const CONSUMER_WIF = process.env.CONSUMER_WIF
@@ -100,9 +100,12 @@ async function runTask(task) {
 
   const address = providerAddress(provider)
   const paymentStart = Date.now()
-  const { txid } = await payProvider(CONSUMER_WIF, address, price)
+  const { txid, feeSats } = await payProvider(CONSUMER_WIF, address, price)
   timings.paymentBuildBroadcastMs = Date.now() - paymentStart
   record.txid = txid
+  record.priceUsd = satsToUsd(price, record.bsvUsd)
+  if (Number.isFinite(feeSats)) { record.feeSats = feeSats; record.feeUsd = satsToUsd(feeSats, record.bsvUsd) }
+  console.log(`[pipeline] Paid ${price} sats (${formatUsd(record.priceUsd)})` + (record.feeSats !== undefined ? `, network fee ${record.feeSats} sats (${formatUsd(record.feeUsd)})` : ''))
   console.log(`[pipeline] Broadcast: ${txid} (${timings.paymentBuildBroadcastMs} ms to build+broadcast)`)
   console.log(`[pipeline] Verifying payment on-chain...`)
 

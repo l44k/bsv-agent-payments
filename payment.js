@@ -198,7 +198,9 @@ async function payProvider(consumerWif, providerAddress, amountSats, { attempts 
         pendingOutputs.set(outpoint(id, 1), { txid: id, vout: 1, value: change.satoshis, tx: Transaction.fromHex(txHex) })
         rememberTx(id, txHex)
       }
-      return { txid, txHex }
+      // network fee = what went in minus what came out (the miner keeps the difference)
+      const feeSats = used.reduce((a, u) => a + u.value, 0) - tx.outputs.reduce((a, o) => a + o.satoshis, 0)
+      return { txid, txHex, feeSats }
     } catch (err) {
       // Conflict with a transaction the indexer hadn't shown us yet (e.g. from
       // a run seconds ago in another process): give it time to catch up, retry.
