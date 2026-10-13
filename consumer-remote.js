@@ -23,6 +23,9 @@ const { buildTasks } = require('./data/tasks')
 const { withSpan } = require('./spans')
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// Bold in a real terminal only (no escape codes in log files or pipes; NO_COLOR turns it off).
+const bold = s => (process.stdout.isTTY && !process.env.NO_COLOR ? `\x1b[1m${s}\x1b[22m` : s)
 const runsPath = () => path.join(process.env.STATE_DIR || __dirname, 'runs.json')
 
 async function post(url, body) {
@@ -129,7 +132,7 @@ async function runTaskRemote(task, { providers, consumerWif, payFn = payProvider
     record.priceUsd = satsToUsd(w.price, record.bsvUsd)
     if (Number.isFinite(feeSats)) { record.feeSats = feeSats; record.feeUsd = satsToUsd(feeSats, record.bsvUsd) }
     log(`[consumer] Paid ${w.price} sats (${formatUsd(record.priceUsd)}) to ${w.provider.id}` +
-      (record.feeSats !== undefined ? `, network fee ${record.feeSats} sats (${formatUsd(record.feeUsd)})` : '') + `: ${txid}`)
+      (record.feeSats !== undefined ? `, network fee ${bold(`${record.feeSats} sats (${formatUsd(record.feeUsd)})`)}` : '') + `: ${txid}`)
 
     const s0 = Date.now()
     let r = await post(`${w.provider.url}/service`, { quoteId: w.quoteId, txid })

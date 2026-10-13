@@ -34,6 +34,9 @@ if (!CONSUMER_WIF) {
 }
 
 const RUNS_LOG_PATH = 'runs.json'
+
+// Bold in a real terminal only (no escape codes in log files or pipes; NO_COLOR turns it off).
+const bold = s => (process.stdout.isTTY && !process.env.NO_COLOR ? `\x1b[1m${s}\x1b[22m` : s)
 const RATE_MAX_AGE_MIN = Number(process.env.RATE_MAX_AGE_MIN || 60)
 
 function providerAddress(provider) {
@@ -105,7 +108,7 @@ async function runTask(task) {
   record.txid = txid
   record.priceUsd = satsToUsd(price, record.bsvUsd)
   if (Number.isFinite(feeSats)) { record.feeSats = feeSats; record.feeUsd = satsToUsd(feeSats, record.bsvUsd) }
-  console.log(`[pipeline] Paid ${price} sats (${formatUsd(record.priceUsd)})` + (record.feeSats !== undefined ? `, network fee ${record.feeSats} sats (${formatUsd(record.feeUsd)})` : ''))
+  console.log(`[pipeline] Paid ${price} sats (${formatUsd(record.priceUsd)})` + (record.feeSats !== undefined ? `, network fee ${bold(`${record.feeSats} sats (${formatUsd(record.feeUsd)})`)}` : ''))
   console.log(`[pipeline] Broadcast: ${txid} (${timings.paymentBuildBroadcastMs} ms to build+broadcast)`)
   console.log(`[pipeline] Verifying payment on-chain...`)
 
