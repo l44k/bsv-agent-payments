@@ -14,7 +14,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@bsv/sdk": "^2.8.7",
     "@opentelemetry/api": "^1.9.1",
